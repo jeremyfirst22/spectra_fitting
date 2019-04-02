@@ -39,7 +39,7 @@ def parse_command_line_opts(argv) :
     ##TODO: Perhaps switch to argparse library for parsing command line options. 
     ##      Seems to support optional arguments, whereas getopt does not. 
     try : 
-        opts, args = getopt.getopt(sys.argv[1:], "hvdi:o:n:p:", ["help", "verbose", "debug","input=", "output=", "numPeaks=","plotfile=", "overwrite", "normalize", "full-analysis", "baseline"] )   
+        opts, args = getopt.getopt(sys.argv[1:], "hvdi:o:n:p", ["help", "verbose", "debug","input=", "output=", "numPeaks=","plot", "overwrite", "normalize", "full-analysis", "baseline"] )   
     except getopt.GetoptError as err : 
         print str(err) 
         usage() 
@@ -76,9 +76,8 @@ def parse_command_line_opts(argv) :
                 print "ERROR: Only up to 8 gaussians so far are supported. "
                 print "\tYou requested %i"%myOpts.numPeaks
                 sys.exit(2) 
-        elif o in ("-p", "--plotfile"): 
+        elif o in ("-p", "--plot"): 
             myOpts.doPlot = True 
-            myOpts.plotFileName = a 
         elif o == "--overwrite" : 
             myOpts.overwrite = True
         elif o == "--normalize" : 
@@ -106,15 +105,6 @@ def parse_command_line_opts(argv) :
         if myOpts.outputFileName == myOpts.inputFileName : 
             print "ERROR: Cowardly refusing to overwrite %s with output data. Check file names."%myOpts.inputFileName
             sys.exit(2)
-    if myOpts.doPlot : 
-        if not myOpts.plotFileName.split('.')[-1] == "png" : 
-            print "ERROR: Plotting to files only currently supported in PNG format." 
-            print "You have requested to plot to a file with extention: %s"%(myOpts.plotFileName.split('.')[-1]) 
-            sys.exit(2) 
-        if not myOpts.overwrite and os.path.isfile(myOpts.plotFileName) :
-            print "ERROR: Plot file \'%s\' exists already, and permission to overwrite not given."%myOpts.plotFileName
-            print "Please delete the file, or give the \'--overwrite\' option" 
-            sys.exit(2) 
 
     ###
     #  Print command line options if verbose
@@ -183,21 +173,26 @@ def normalize(data) :
     return np.array([xs,ys]).T
 
 
-def plot_fits(data,popt,fileName) : 
+def plot_fits(data,popt, opts) : 
+    basename = os.path.splitext(opts.inputFileName)[0]
+    filename = basename + ".fit_%i_components.png"%(len(popt) / 3)
+
+    fig, ax = plt.subplots(1) 
+
     xs = np.linspace(np.min(data[:,0]),np.max(data[:,0]),500) 
     func = matchFunctionName(len(popt )/ 3) 
     fit = func(xs, *popt) 
 
-    plt.scatter(data[:,0], data[:,1],marker='o',s=25,color='r',zorder=5) 
-    plt.plot(xs,fit,'k-',linewidth=4,zorder=1) 
+    ax.scatter(data[:,0], data[:,1],marker='o',s=5,color='r',zorder=5) 
+    ax.plot(xs,fit,'k-',linewidth=4,zorder=1) 
 
     if len(popt) / 3 > 1 : 
         for i in range(len(popt[::3])) : 
             params = popt[i*3:i*3+3]
             fiti = single_gaussian(xs, *params)
-            plt.plot(xs,fiti,'b--',linewidth=2,zorder=3) 
+            ax.plot(xs,fiti,'b--',linewidth=2,zorder=3) 
     
-    plt.savefig(fileName,format='png') 
+    fig.savefig(filename,format='png') 
     return 0
 
 def write_fit_data(data,popt,fileName) : 
@@ -234,25 +229,116 @@ def write_fit_data(data,popt,fileName) :
     fit = func(xs,*popt) 
     return 0
 
-def baseline_correct(data,verbose) : 
-    if verbose : print "Entering base line correction function" 
+def closest_minima(arr , center) : 
+    assert 0 < center and center < len(arr) 
+
+    lowerMin = center 
+    for i in range(center-1, 0, -1) : 
+        if arr[i] < arr[lowerMin] : 
+            lowerMin = i 
+        else : break
+
+    upperMin = center 
+    for i in range(center+1, len(arr)) : 
+        if arr[i] < arr[upperMin] : 
+            upperMin = i 
+        else : break
+    
+    return lowerMin, upperMin
+
+
+def baseline_correct(data,opts) : 
+    if opts.verbose : print "Entering base line correction function" 
 
     x,y = data[:,0],data[:,1]
 
-    z = np.polyfit(x,y,5)
+
+    ## Fit 5th order polynomial 
+    guessOrder = 5 
+
+    z = np.polyfit(x,y,guessOrder)
     fit = np.poly1d(z) 
-    if verbose : 
+    if opts.verbose : 
         print z 
 
-    plt.scatter(x,y,s=1)
-    plt.plot(x,fit(x)) 
+    cutFactor = 3
+    cutsOkay = False 
 
-    plt.show() 
+    for cutFactor in range(3, 0, -1) : 
+        residuals = np.sqrt((y - fit(x))**2) 
+        peak = np.argmax(residuals) 
+        lowMin, highMin = closest_minima(residuals, peak) 
+        cutMin = peak - cutFactor*(peak - lowMin) 
+        cutMax = peak + cutFactor*(highMin - peak) 
+        if opts.verbose : 
+            print "Min. of signal: %.2f"%x[lowMin]
+            print "Max. of signal: %.2f"%x[highMin]
 
-    sys.exit() 
+        if not (peak - cutMin) < cutMin and (cutMax - peak) < (len(x) - cutMax) : 
+            print (peak-cutMin) 
+            print cutMin
+            print (cutMax - peak) 
+            print (len(x) - cutMax) 
+            print "WARNING: Not enough data to fit with factor of %i times nearest minima. "%cutFactor
+            print "\tReducing factor and trying again" 
+        else : 
+            cutsOkay = True 
+            break 
+    if not cutsOkay : 
+        print "ERROR: Unable to find a fit factor small enough to fit data. Try using data with larger bounds" 
+        sys.exit() 
 
-    return 0
 
+    if opts.doPlot : 
+        basename = os.path.splitext(opts.inputFileName)[0]
+        findFitFile = basename + ".find_baseline.png"
+
+        figFindFit, axFindFit = plt.subplots(1) 
+
+        axFindFit.plot(x,np.sqrt((y - fit(x))**2), label="Residuals of %i order polynomial fit"%(guessOrder)) 
+        axFindFit.axvline(x[lowMin], linestyle='--',color='k', label="Closest min of residuals") 
+        axFindFit.axvline(x[highMin], linestyle='--',color='k') 
+        axFindFit.axvline(x[peak], linestyle='--',color='b',label="Max of residual, should be peak") 
+        axFindFit.axvline(x[cutMin], linestyle='--',color='r', label="%i x min of residual"%(cutFactor))  
+        axFindFit.axvline(x[cutMax], linestyle='--',color='r') 
+
+        axFindFit.legend(loc=1,fontsize='xx-small') 
+
+        figFindFit.savefig(findFitFile, format='png') 
+
+    cutX = np.delete(x, np.s_[cutMin:cutMax]) 
+    cutY = np.delete(y, np.s_[cutMin:cutMax]) 
+
+
+    fitOrder = 5 
+    cutZ = np.polyfit(cutX,cutY,fitOrder)
+    cutFit = np.poly1d(cutZ) 
+
+    if opts.doPlot : 
+        basename = os.path.splitext(opts.inputFileName)[0]
+        fitFile = basename + ".baseline_correction.png"
+
+        figFit , axFit = plt.subplots(1) 
+
+        axFit.scatter(x,y,s=1,label="Raw spectra")
+        axFit.plot(x,fit(x), label="%i order guess fit"%guessOrder) 
+        axFit.plot(x,cutFit(x),'g--',label="%i order fit to data outside red dashed"%fitOrder) 
+
+        #axFit.axvline(x[lowMin], linestyle='--',color='k', label="Closest min of residuals") 
+        #axFit.axvline(x[highMin], linestyle='--',color='k') 
+        axFit.axvline(x[peak], linestyle='--',color='b',label="Peak found by max of guess residuals") 
+
+        axFit.axvline(x[cutMin], linestyle='--',color='r',label="Bounds of fitting region") 
+        axFit.axvline(x[cutMax], linestyle='--',color='r') 
+
+        axFit.legend(loc=1,fontsize='xx-small') 
+
+        figFit.savefig(fitFile,format='png') 
+
+    corrected = data 
+    corrected[:,1] -= cutFit(corrected[:,0]) 
+
+    return corrected
 
 
 def main(argv) : 
@@ -261,7 +347,7 @@ def main(argv) :
     data = read_data(myOpts.inputFileName) 
 
     if myOpts.doBaseLineCorrect : 
-        baseline_correct(data,myOpts.verbose) 
+        data = baseline_correct(data,myOpts) 
 
     if myOpts.doNormalize : 
         data = normalize(data) 
@@ -273,7 +359,7 @@ def main(argv) :
                     %(i+1,popt[i*3],popt[i*3+1],popt[i*3+2]) 
 
     if myOpts.doPlot : 
-        plot_fits(data,popt,myOpts.plotFileName) 
+        plot_fits(data,popt, myOpts) 
     
     if myOpts.doOutfile : 
         write_fit_data(data,popt,myOpts.outputFileName)   
