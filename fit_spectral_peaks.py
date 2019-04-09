@@ -157,7 +157,7 @@ def matchFunctionName(i) :
 def read_data(fileName) :
     if not os.path.isfile(fileName) :
         print "Error: %s does not exist"%(fileName)
-        sys.exit()
+        sys.exit(2)
     try :
         data = np.genfromtxt(fileName)
     except :
@@ -222,8 +222,11 @@ def write_fit_data(data,popt, opts) :
     combinedFit = func(xs,*popt) 
     fits = [] 
 
+    avg, std = weighted_avg_and_std(data[:,0],data[:,1])
+
     with open(fileName,'w') as f :
         f.write('#\n') 
+        f.write("# Mean vibrational frequency: %.3f +/- %.3f \n"%(avg, std) ) 
         f.write('# Fit to %i gaussians:\n'%numpeaks) 
         f.write('# fit(x) = a*e^(-(x-b)^2 / (2c^2))\n') 
         f.write('#\n') 
@@ -336,7 +339,7 @@ def baseline_correct_minimization(data,opts) :
 
         if lastResidual < residuals : 
             print "ERROR: Baseline fit diverging. Try using a larger range spectrum."
-            sys.exit() 
+            sys.exit(2) 
 
         if residuals < tolerance : #lastResidual - residuals < tolerance  : 
             #cutsOkay = True 
@@ -409,7 +412,7 @@ def spline_fitting(x,y,opts) :
 
     if opts.debug : print "Max width of peak = %i" %maxwidth
 
-    spl = UnivariateSpline(cutX,cutY) 
+    spl = UnivariateSpline(cutX,cutY) #,s= 0.1) 
     if opts.debug : 
         residual = np.sum((spl(x) - y)**2)
         print "Residual of baseline = %f"%residual 
@@ -418,8 +421,8 @@ def spline_fitting(x,y,opts) :
         fig, axarr = plt.subplots(2,1) 
         axarr[0].scatter(x,y, s = 1) 
         axarr[0].axvline(x[peak], linestyle='--', color='k', label="Guess of peak position") 
-        axarr[0].axvline(x[cutMin], linestyle='--',color='r', label="bounds of cut") 
-        axarr[0].axvline(x[cutMax], linestyle='--',color='r') 
+    #    axarr[0].axvline(x[cutMin], linestyle='--',color='r', label="bounds of cut") 
+    #    axarr[0].axvline(x[cutMax], linestyle='--',color='r') 
         axarr[0].plot(x,spl(x),'k--', label="Baseline spline fit"  ) 
 
         axarr[1].plot(x, y - spl(x))  
@@ -443,7 +446,7 @@ def rubberband(x, y, opts):
     v = np.roll(v, -v.argmin())
 
     if opts.doPlot : 
-        fig, axarr = plt.subplots(2,1,figsize=(6,12)) 
+        fig, axarr = plt.subplots(2,1) #,figsize=(6,12)) 
         axarr[0].scatter(x,y, s = 1) 
         for point in v : 
             axarr[0].scatter(x[point],y[point],s=15,color='r')
@@ -457,7 +460,9 @@ def rubberband(x, y, opts):
             axarr[0].scatter(x[point],y[point],s=25,color='b')
         axarr[0].plot(x,np.interp(x, x[v], y[v]) , 'k--', label="Convex hull (rubberband) fit")  
 
-        axarr[1].plot(x, y - np.interp(x, x[v], y[v])) 
+#        axarr[1].plot(x, y - np.interp(x, x[v], y[v])) 
+        spl = UnivariateSpline(x[v], y[v])
+        axarr[1].plot(x, y - spl(x) ) 
 
         basename = os.path.splitext(opts.inputFileName)[0]
         fig.savefig(basename+'.rubberband_fitting.pdf', format='pdf') 
@@ -473,16 +478,17 @@ def rubberband(x, y, opts):
 def find_nearest(array, value):
     array = np.asarray(array)
     idx = np.argmin(np.abs(array - value))
-    print value, array[idx] 
+    #print value, array[idx] 
     return idx
 
-def cut_peak(data, opts) : 
+def cut_peak(data, minX, maxX, opts) : 
+    if opts.debug : print "Now entering cut_peak function" 
     x,y = data[:,0], data[:,1]
 
-    #find_nearest(x, 2140)
-
-    cutMin = find_nearest(x, 2130) 
-    cutMax = find_nearest(x, 2190) 
+    cutMin = find_nearest(x, minX) 
+    cutMax = find_nearest(x, maxX) 
+    
+    if opts.debug : print "Cutting from %.2f to %.2f" %(cunMin, cutMax) 
 
     cutX = x[cutMin:cutMax]
     cutY = y[cutMin:cutMax]
@@ -512,6 +518,13 @@ def main(argv) :
 
     data = read_data(myOpts.inputFileName) 
 
+    if myOpts.doCut : 
+        data = cut_peak(data, 2145, 2180, myOpts) 
+
+    #plt.close() 
+    #plt.plot(data[:,0], data[:,1]) 
+    #plt.show() 
+
     if myOpts.doBaseLineCorrect : 
         if myOpts.baseline == "rubberband" : 
             baseline = rubberband(data[:,0], data[:,1], myOpts) 
@@ -520,8 +533,12 @@ def main(argv) :
         else : 
             print "ERROR: Baseline fitting not recognized. Argument for '--baseline' must be either 'rubberband' or 'spline-fit'"
             print "\t\tbaseline = %s"%myOpts.baseline 
-            sys.exit() 
+            sys.exit(2) 
         data[:,1] -=  baseline
+
+    #plt.close() 
+    #plt.plot(data[:,0], data[:,1]) 
+    #plt.show() 
 
     if myOpts.doSmooth : 
         data = smooth_data(data, myOpts) 
@@ -530,19 +547,9 @@ def main(argv) :
         data = normalize(data) 
 
     if myOpts.doCut : 
-        data = cut_peak(data, myOpts) 
+        data = cut_peak(data, 2140, 2180, myOpts) 
 
     avg, std = weighted_avg_and_std(data[:,0],data[:,1]) 
-
-    #plt.close() 
-    #plt.scatter(data[:,0], data[:,1]) 
-    #spl = UnivariateSpline(data[:,0], data[:,1],s=4) 
-    #plt.plot(data[:,0],spl(data[:,0]) ) 
-    #smoothed = savgol_filter(data[:,1], 51, 2) 
-    #plt.plot(data[:,0],smoothed) 
-    #print data[np.argmax(smoothed),0]
-
-    #plt.show() 
 
     print "Mean vibrational frequency: %5.3f +/- %.3f"%(avg, std) 
 
