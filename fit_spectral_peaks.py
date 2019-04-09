@@ -11,125 +11,45 @@ import os
 from os import sys
 from scipy.signal import savgol_filter
 import getopt
+import argparse
 
 from gaussian_funcs import * 
 
-def usage() :
-    ##TODO: Need to actually write a help function
-    print "Help me"
+def parse_command_line_opts(argv) : 
+    parser = argparse.ArgumentParser(
+            description="Fit spectrum to Gaussian.", 
+            epilog="Example: Provide a working example" , 
+            ) 
 
-###
-#  Class for holding all command line options used for program. 
-###
-class optStruct : 
-    #### 
-    ## Initialize default command line options 
-    #### 
-    overwrite = False               ##Bool: Permission to write to files that already exist. 
-    verbose = False                 ##Bool: Print information about fits and parameters. 
-    doPlot = False                  ##Bool: Plot fits and components
-    doOutfile = False               ##Bool: Write fits and components to text file
-    inputFileName = "/dev/null"     ##String: txt file from which to read data. Data must be two-column format. 
-    numPeaks = 1                    ##Int:    Number of gaussian components to fit to input data
-    doNormalize = False             ##Bool: Flag to normalize the data by peak height to 1. 
-    doFullAnalysis = False          ##Bool: Run a series of fits with 1->8 components. Plot residuals for comparison. 
-    debug = False                   ##Bool: Print an annoying amount of information for debugging purposes. 
-    doBaseLineCorrect = False       ##Bool: Do baseline correction. (Inteded to correct for water peak)
-    doCut = False 
-    doSmooth = False 
-    baseline = "False"
+    parser.add_argument('inputFileName', help="Input file name. Typically text file of spectrum in two columns (Wavelength & Absorbance)." ) 
+    parser.add_argument('--verbose', action='store_true') 
+    parser.add_argument('--debug', action='store_true') 
+    parser.add_argument('--overwrite', action='store_true') 
+    parser.add_argument('-n', '--numPeaks', dest='numPeaks', type=int, choices=range(1,9), default=1) 
+    parser.add_argument('--full-analysis', dest='doFullAnalysis', action='store_true') 
+    parser.add_argument('-p', '--plot', dest='doPlot', action='store_true') 
+    parser.add_argument('-c', '--cut',dest='cuts', type=int, nargs=2, metavar=('min', 'max')) 
+    parser.add_argument('-b', '--baseline', dest='baseline', type=str, choices=['rubberband', 'spline-fit']) 
+    parser.add_argument('-s', '--smooth', dest='doSmooth', action='store_true') 
+    parser.add_argument('-m', '--normalize', dest='doNormalize', action='store_true') 
+    parser.add_argument('-o', '--outfile', dest='doOutfile', action='store_true') 
 
-def parse_command_line_opts(argv) :
-    myOpts = optStruct   ##Struct to hold command line options to be passed back to main(). 
+    args = parser.parse_args() 
+    args.doBaseLineCorrect = False 
+    args.doCut = False 
+    if args.cuts is not None : 
+        args.doCut = True 
+    if args.baseline is not None : 
+        args.doBaseLineCorrect = True 
+    if args.debug : 
+        args.verbose = True 
 
-    ##TODO: Perhaps switch to argparse library for parsing command line options. 
-    ##      Seems to support optional arguments, whereas getopt does not. 
-    try : 
-        opts, args = getopt.getopt(sys.argv[1:], "hvdi:on:pmfb:cs", ["help", "verbose", "debug","input=", "output", "numPeaks=","plot", "overwrite", "normalize", "full-analysis", "baseline=", "--cut", "--smooth" ] )   
-    except getopt.GetoptError as err : 
-        print str(err) 
-        usage() 
-        sys.exit(2) 
-    ###
-    #  Parse command line options
-    ###
-    for o, a in opts :
-        if o in ('-v','--verbose') : 
-            myOpts.verbose = True
-        elif o in ('-d','--debug') : 
-            myOpts.debug = True
-            myOpts.verbose = True 
-        elif o in ("-h", "--help") : 
-            usage() 
-            sys.exit() 
-        elif o in ("-i", "--input") : 
-            if not os.path.isfile(a) : 
-                print "ERROR: Input file \'%s\' not found."%a 
-                usage 
-                sys.exit(2) 
-            myOpts.inputFileName = a 
-        elif o in ("-o", "--output") : 
-            myOpts.doOutfile = True 
-        elif o in ("-n", "--numPeaks") : 
-            try : 
-                myOpts.numPeaks = int(a) 
-            except ValueError : 
-                print "ERROR: %s argument accepts an integer value. "%o
-                print "\tYou supplied %s"%(a)
-                sys.exit(2)
-            if myOpts.numPeaks not in range(8+1) : 
-                print "ERROR: Only up to 8 gaussians so far are supported. "
-                print "\tYou requested %i"%myOpts.numPeaks
-                sys.exit(2) 
-        elif o in ("-p", "--plot"): 
-            myOpts.doPlot = True 
-        elif o == "--overwrite" : 
-            myOpts.overwrite = True
-        elif o in ("-m", "--normalize") : 
-            myOpts.doNormalize = True
-        elif o == "--full-analysis" : 
-            myOpts.doFullAnalysis = True
-        elif o in ("-c", "--cut") : 
-            myOpts.doCut = True
-        elif o in ("-s", "--smooth") : 
-            myOpts.doSmooth = True
-        elif o in ("-b", "--baseline") : 
-            myOpts.doBaseLineCorrect = True
-            myOpts.baseline = a 
-        else : 
-            print "ERROR: Unrecognized option %s"%o 
-            sys.exit(2) 
+    if args.verbose : 
+        parser.print_help() 
+    if args.debug : 
+        print "Command line arguments:" , args 
 
-    ###
-    #  Check command line options to make sure they are reasonable
-    ###
-    if myOpts.inputFileName == "/dev/null" : 
-        print "ERROR: Input file option required."
-        usage() 
-        sys.exit(2) 
-    if myOpts.doOutfile : 
-        basename = os.path.splitext(myOpts.inputFileName)[0]
-        outputFileName = basename + ".out" 
-        if not myOpts.overwrite and os.path.isfile(outputFileName) :
-            print "ERROR: Output file \'%s\' exists already, and permission to overwrite not given."%outputFileName
-            print "Please delete the file, or give the \'--overwrite\' option" 
-            sys.exit(2) 
-        if outputFileName == myOpts.inputFileName : 
-            print "ERROR: Cowardly refusing to overwrite %s with output data. Check file names."%myOpts.inputFileName
-            sys.exit(2)
-
-    ###
-    #  Print command line options if verbose
-    ### 
-    if myOpts.verbose  : 
-        print "verbose                   = %r"%myOpts.verbose 
-        print "overwrite                 = %s"%myOpts.overwrite 
-        print "input file                = %s"%myOpts.inputFileName 
-        print "number of gaussians to fit= %i"%myOpts.numPeaks 
-        print "doBaseline                = %r"%myOpts.doBaseLineCorrect
-        print "baseline type             = %r"%myOpts.baseline 
-
-    return myOpts
+    return args 
 
 def matchFunctionName(i) : 
     if i == 1 : 
@@ -471,7 +391,6 @@ def rubberband(x, y, opts):
     spl = UnivariateSpline(x[v], y[v])
     return spl(x)
 
-
     # Create baseline using linear interpolation between vertices
     #return np.interp(x, x[v], y[v])
 
@@ -488,7 +407,7 @@ def cut_peak(data, minX, maxX, opts) :
     cutMin = find_nearest(x, minX) 
     cutMax = find_nearest(x, maxX) 
     
-    if opts.debug : print "Cutting from %.2f to %.2f" %(cunMin, cutMax) 
+    if opts.debug : print "Cutting from %.2f to %.2f" %(x[cutMin], x[cutMax]) 
 
     cutX = x[cutMin:cutMax]
     cutY = y[cutMin:cutMax]
@@ -519,7 +438,7 @@ def main(argv) :
     data = read_data(myOpts.inputFileName) 
 
     if myOpts.doCut : 
-        data = cut_peak(data, 2145, 2180, myOpts) 
+        data = cut_peak(data, min(myOpts.cuts) , max(myOpts.cuts), myOpts) 
 
     #plt.close() 
     #plt.plot(data[:,0], data[:,1]) 
