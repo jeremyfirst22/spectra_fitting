@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 from gaussian_funcs import *
+from spectra_transformations import find_nearest
 
 def read_data(fileName) :
     if not os.path.isfile(fileName) :
@@ -30,10 +31,11 @@ def write_fit_data(data,popt, opts) :
     fits = []
 
     avg, std = weighted_avg_and_std(data[:,0],data[:,1])
+    fwhm = full_width_half_max(data[:,0], data[:,1], opts)
 
     with open(fileName,'w') as f :
         f.write('#\n')
-        f.write("# Mean vibrational frequency: %.3f +/- %.3f \n"%(avg, std) )
+        f.write("# Mean vibrational frequency: %.3f +/- %.3f. FWHM: %.3f \n"%(avg, std, fwhm) )
         f.write('# Fit to %i gaussians:\n'%numpeaks)
         f.write('# fit(x) = a*e^(-(x-b)^2 / (2c^2))\n')
         f.write('#\n')
@@ -93,3 +95,16 @@ def weighted_avg_and_std(values, weights):
     # Fast and numerically precise:
     variance = np.average((values-average)**2, weights=weights)
     return (average, np.sqrt(variance))
+
+def full_width_half_max(x, y, opts) : 
+    if opts.debug : print "Entering full_width_half_max"
+
+    peakIndex = np.argmax(y) 
+    minIndex = find_nearest(y[:peakIndex],y[peakIndex] * 0.5)   #half peak from below peak
+    maxIndex = find_nearest(y[peakIndex:],y[peakIndex] * 0.5)   #half peak from above peak
+
+    if opts.debug : print "Half peaks: %.3f  %.3f"%(x[minIndex], x[maxIndex]) 
+
+    return np.abs(x[maxIndex] - x[minIndex]) #width at half peak 
+
+

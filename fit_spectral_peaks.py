@@ -79,8 +79,9 @@ def main(argv) :
         data = normalize(data) 
 
     avg, std = weighted_avg_and_std(data[:,0],data[:,1]) 
+    fwhm = full_width_half_max(data[:,0], data[:,1], myOpts) 
 
-    print "Mean vibrational frequency: %5.3f +/- %.3f"%(avg, std) 
+    print "Mean vibrational frequency: %5.3f +/- %.3f. FWHM: %.3f"%(avg, std,fwhm) 
 
     popt, pcov = fit_data(data,myOpts.numPeaks,myOpts.debug) 
 
