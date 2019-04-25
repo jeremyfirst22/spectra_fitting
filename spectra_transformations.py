@@ -40,7 +40,7 @@ def spline_fitting(x,y,opts) :
 
     if opts.debug : print "Max width of peak = %i" %maxwidth
 
-    spl = UnivariateSpline(cutX,cutY) #,s= 0.1) 
+    spl = UnivariateSpline(cutX,cutY, k=4) #,s= 0.1) 
     if opts.debug :
         residual = np.sum((spl(x) - y)**2)
         print "Residual of baseline = %f"%residual
