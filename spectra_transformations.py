@@ -17,30 +17,25 @@ def normalize(data) :
     return np.array([xs,ys]).T
 
 def spline_fitting(x,y,opts) :
-    tolerance = 1e-6
+    if opts.guessPeak : 
+        minPeak = find_nearest(x, np.min(opts.peak), opts) 
+        maxPeak = find_nearest(x, np.max(opts.peak), opts) 
+    else : 
+        guessSpl = UnivariateSpline(x, y)
+        peak = np.argmax((guessSpl(x) - y )**2)
+        if x[peak] > 2170 or x[peak] < 2130 :
+            print "WARNING: Guess of peak outside of 2130-2170 cm^-1. Double check fitting file and be sure we have found the correct peak"
+        maxSignalRatio = 0.50
+        maxwidth = int(round((len(x) - peak) * maxSignalRatio))   ##distance to maximum signal
+        if maxwidth > peak * maxSignalRatio :
+            maxwidth = int(round(peak * maxSignalRatio))         ##distance to minimum signal 
+        minPeak= peak - maxwidth
+        maxPeak= peak + maxwidth
 
-    guessSpl = UnivariateSpline(x, y)
+    cutX = np.append(x[:minPeak], x[maxPeak:]) 
+    cutY = np.append(y[:minPeak], y[maxPeak:]) 
 
-    #plt.plot(x, guessSpl(x), 'k--') 
-
-    peak = np.argmax((guessSpl(x) - y )**2)
-    if x[peak] > 2170 or x[peak] < 2130 :
-        print "WARNING: Guess of peak outside of 2130-2170 cm^-1. Double check fitting file and be sure we have found the correct peak"
-
-    maxSignalRatio = 0.50
-    maxwidth = int(round((len(x) - peak) * maxSignalRatio))   ##distance to maximum signal
-    if maxwidth > peak * maxSignalRatio :
-        maxwidth = int(round(peak * maxSignalRatio))         ##distance to minimum signal 
-
-    cutMin = peak - maxwidth
-    cutMax = peak + maxwidth
-
-    cutX = np.delete(x, np.s_[cutMin:cutMax])
-    cutY = np.delete(y, np.s_[cutMin:cutMax])
-
-    if opts.debug : print "Max width of peak = %i" %maxwidth
-
-    spl = UnivariateSpline(cutX,cutY, k=4) #,s= 0.1) 
+    spl = UnivariateSpline(cutX,cutY, k=5) #,s= 0.1) 
     if opts.debug :
         residual = np.sum((spl(x) - y)**2)
         print "Residual of baseline = %f"%residual
@@ -48,9 +43,9 @@ def spline_fitting(x,y,opts) :
     if opts.doPlot :
         fig, axarr = plt.subplots(2,1)
         axarr[0].scatter(x,y, s = 1)
-        axarr[0].axvline(x[peak], linestyle='--', color='k', label="Guess of peak position")
-    #    axarr[0].axvline(x[cutMin], linestyle='--',color='r', label="bounds of cut") 
-    #    axarr[0].axvline(x[cutMax], linestyle='--',color='r') 
+        #axarr[0].axvline(x[peak], linestyle='--', color='k', label="Guess of peak position")
+        axarr[0].axvline(x[minPeak], linestyle='--',color='r', label="bounds of cut") 
+        axarr[0].axvline(x[maxPeak], linestyle='--',color='r') 
         axarr[0].plot(x,spl(x),'k--', label="Baseline spline fit"  )
 
         axarr[1].plot(x, y - spl(x))
@@ -59,6 +54,9 @@ def spline_fitting(x,y,opts) :
         fig.savefig(basename+'.spline_fitting.pdf', format='pdf')
 
     return spl(x)
+
+
+
 
 def rubberband(x, y, opts):
     # Find the convex hull
@@ -102,18 +100,20 @@ def rubberband(x, y, opts):
     # Create baseline using linear interpolation between vertices
     #return np.interp(x, x[v], y[v])
 
-def find_nearest(array, value):
+def find_nearest(array, value, opts):
+    if opts.debug : print "Now entering find_nearest function" 
+
     array = np.asarray(array)
     idx = np.argmin(np.abs(array - value))
-    #print value, array[idx] 
+    if opts.debug : print "\tFound %.3f at %.3f. Looking for %.3f" %(array[idx],idx, value)
     return idx
 
 def cut_peak(data, minX, maxX, opts) :
     if opts.debug : print "Now entering cut_peak function"
     x,y = data[:,0], data[:,1]
 
-    cutMin = find_nearest(x, minX)
-    cutMax = find_nearest(x, maxX)
+    cutMin = find_nearest(x, minX, opts)
+    cutMax = find_nearest(x, maxX, opts)
 
     if opts.debug : print "Cutting from %.2f to %.2f" %(x[cutMin], x[cutMax])
 

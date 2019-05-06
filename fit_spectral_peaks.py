@@ -35,12 +35,16 @@ def parse_command_line_opts(argv) :
     parser.add_argument('--smooth-factor', dest='smoothFactor', action='store', default=1, type=int, help="Window (in number of data points) to smooth. Must be >2.") 
     parser.add_argument('-m', '--normalize', dest='doNormalize', action='store_true', help="Normalize maximum of spectrum to 1") 
     parser.add_argument('-o', '--outfile', dest='doOutfile', action='store_true', help="Write corrected spectrum, fit, and gaussian components to file") 
+    parser.add_argument('-e', '--peak-edge',dest='peak', type=float, nargs=2, metavar=('minPeak', 'maxPeak'), help="Provide edge of peaks for baseline fit. Inside this range is considered not the baseline") 
 
     args = parser.parse_args() 
     args.doBaseLineCorrect = False 
     args.doCut = False 
+    args.guessPeak = False
     if args.cuts is not None : 
         args.doCut = True 
+    if args.peak is not None : 
+        args.guessPeak = True 
     if args.baseline is not None : 
         args.doBaseLineCorrect = True 
     if args.debug : 
@@ -50,6 +54,12 @@ def parse_command_line_opts(argv) :
         parser.print_help() 
     if args.debug : 
         print "Command line arguments:" , args 
+
+    if args.doOutfile and os.path.isfile(os.path.splitext(args.inputFileName)[0] + ".out") \
+            and not args.overwrite : 
+        print "ERROR: %s file already exists. Cowardly refusing to overwrite data. Use '--overwrite' flag to override" %(os.path.splitext(args.inputFileName)[0] + ".out") 
+        sys.exit() 
+
 
     return args 
 

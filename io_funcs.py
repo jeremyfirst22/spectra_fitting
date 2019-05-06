@@ -100,8 +100,15 @@ def full_width_half_max(x, y, opts) :
     if opts.debug : print "Entering full_width_half_max"
 
     peakIndex = np.argmax(y) 
-    minIndex = find_nearest(y[:peakIndex],y[peakIndex] * 0.5)   #half peak from below peak
-    maxIndex = find_nearest(y[peakIndex:],y[peakIndex] * 0.5)   #half peak from above peak
+
+    if opts.debug : print "Peak height = %.3f" %y[peakIndex]
+    if opts.debug : print "Peak location = %.3f" %x[peakIndex]
+
+    minIndex = find_nearest(y[:peakIndex],y[peakIndex] * 0.5, opts)   #half peak from below peak
+    maxIndex = find_nearest(y[peakIndex:],y[peakIndex] * 0.5, opts) + peakIndex  #half peak from above peak
+
+    if opts.debug : print "Half peak min = %.3f at %.3f" %(y[minIndex], x[minIndex]) 
+    if opts.debug : print "Half peak max = %.3f at %.3f" %(y[maxIndex], x[maxIndex]) 
 
     if opts.debug : print "Half peaks: %.3f  %.3f"%(x[minIndex], x[maxIndex]) 
 
