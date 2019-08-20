@@ -20,8 +20,8 @@ def spline_fitting(x,y,opts) :
     flipped = False 
     if x[0] > x[-1] : 
         if opts.debug : print "\tUnivariateSpline only accepts increasing x order. Flipping x and y arrays\n" 
-        x = np.flip(x) 
-        y = np.flip(y) 
+        x = np.flip(x,0) 
+        y = np.flip(y,0) 
         flipped = True 
     assert x[0] < x[-1] 
 
@@ -64,7 +64,7 @@ def spline_fitting(x,y,opts) :
         fig.savefig(basename+'.spline_fitting.pdf', format='pdf')
     if opts.debug : print spl(x) 
 
-    if flipped : x = np.flip(x) ##Flip x values back to match original data
+    if flipped : x = np.flip(x,0) ##Flip x values back to match original data
     return spl(x)
 
 
@@ -74,8 +74,8 @@ def rubberband(x, y, opts):
     flipped = False 
     if x[0] > x[-1] : 
         if opts.debug : print "\tUnivariateSpline only accepts increasing x order. Flipping x and y arrays\n" 
-        x = np.flip(x) 
-        y = np.flip(y) 
+        x = np.flip(x,0) 
+        y = np.flip(y,0) 
         flipped = True 
     assert x[0] < x[-1] 
     # Find the convex hull
