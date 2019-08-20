@@ -9,7 +9,7 @@ from os import sys
 
 from gaussian_funcs import matchFunctionName
 
-def normalize(data) :
+def normalize(data, opts) :
     xs = data[:,0]
     ys = data[:,1]
 
@@ -17,6 +17,14 @@ def normalize(data) :
     return np.array([xs,ys]).T
 
 def spline_fitting(x,y,opts) :
+    flipped = False 
+    if x[0] > x[-1] : 
+        if opts.debug : print "\tUnivariateSpline only accepts increasing x order. Flipping x and y arrays\n" 
+        x = np.flip(x) 
+        y = np.flip(y) 
+        flipped = True 
+    assert x[0] < x[-1] 
+
     if opts.guessPeak : 
         minPeak = find_nearest(x, np.min(opts.peak), opts) 
         maxPeak = find_nearest(x, np.max(opts.peak), opts) 
@@ -54,13 +62,22 @@ def spline_fitting(x,y,opts) :
 
         basename = os.path.splitext(opts.inputFileName)[0]
         fig.savefig(basename+'.spline_fitting.pdf', format='pdf')
+    if opts.debug : print spl(x) 
 
+    if flipped : x = np.flip(x) ##Flip x values back to match original data
     return spl(x)
 
 
 
 
 def rubberband(x, y, opts):
+    flipped = False 
+    if x[0] > x[-1] : 
+        if opts.debug : print "\tUnivariateSpline only accepts increasing x order. Flipping x and y arrays\n" 
+        x = np.flip(x) 
+        y = np.flip(y) 
+        flipped = True 
+    assert x[0] < x[-1] 
     # Find the convex hull
     if opts.verbose : "Print using rubberband baseline correction method"
 
@@ -97,6 +114,8 @@ def rubberband(x, y, opts):
 
     ##Spline fit to vertices
     spl = UnivariateSpline(x[v], y[v])
+
+    if flipped : x = np.flip(x) ##Flip x values back to match original data
     return spl(x)
 
     # Create baseline using linear interpolation between vertices
@@ -112,17 +131,27 @@ def find_nearest(array, value, opts):
 
 def cut_spectrum(data, minX, maxX, opts) :
     if opts.debug : print "Now entering cut_spectrum function"
+    if opts.debug : print "\tCutting from %8.3f to %8.3f" %(minX, maxX) 
     x,y = data[:,0], data[:,1]
 
     cutMin = find_nearest(x, minX, opts)
     cutMax = find_nearest(x, maxX, opts)
+    
+    if cutMin > cutMax : 
+        if opts.debug : print "\tMin index > Max index. Flipping"
+        temp = cutMin 
+        cutMin = cutMax 
+        cutMax = temp 
 
     if opts.debug : print "Cutting from %.2f to %.2f" %(x[cutMin], x[cutMax])
 
     cutX = x[cutMin:cutMax]
     cutY = y[cutMin:cutMax]
 
+    if opts.debug : print "\tLength of cutX: %i\tLength of cutY: %i\n" %(len(cutX), len(cutY) ) 
+
     data = np.array([cutX, cutY]).T
+    if opts.debug : print "Length of cut spectrum %i\n" %(len(data)) 
 
     return data
 

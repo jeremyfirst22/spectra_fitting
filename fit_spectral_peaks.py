@@ -83,10 +83,11 @@ def main(argv) :
             print "ERROR: Baseline fitting not recognized. Argument for '--baseline' must be either 'rubberband' or 'spline-fit'"
             print "\t\tbaseline = %s"%myOpts.baseline 
             sys.exit(2) 
+        if myOpts.debug : print baseline 
         data[:,1] -=  baseline
 
-    if myOpts.doNormalize : 
-        data = normalize(data) 
+    #if myOpts.doNormalize : 
+    #    data = normalize(data, myOpts) 
 
     avg, std = weighted_avg_and_std(data[:,0],data[:,1]) 
     fwhm = full_width_half_max(data[:,0], data[:,1], myOpts) 
@@ -96,8 +97,8 @@ def main(argv) :
     popt, pcov = fit_data(data,myOpts.numPeaks,myOpts.debug) 
 
     for i in range(myOpts.numPeaks) : 
-        print "Component %i: a = %5.3f\tb = %5.3f\tc = %5.3f"\
-                %(i+1,popt[i*3],popt[i*3+1], 2.35482*popt[i*3+2]) 
+        print "Component %i: a = %5.3f\tb = %5.3f\tc = %5.3f\tFWHM = %5.3f"\
+                %(i+1,popt[i*3],popt[i*3+1], popt[i*3+2], 2.35482*popt[i*3+2]) 
 
     if myOpts.doPlot : 
         plot_fits(data,popt, myOpts) 
@@ -107,7 +108,7 @@ def main(argv) :
 
     if myOpts.doFullAnalysis : 
         if myOpts.verbose : print "Starting Full analysis"
-        data = normalize(data) 
+        data = normalize(data, myOpts) 
 
         f1, ax1 = plt.subplots(1,1) 
         f2, ax2 = plt.subplots(1,1) 

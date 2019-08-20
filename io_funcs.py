@@ -65,7 +65,7 @@ def write_fit_data(data,popt, opts) :
             a, b, c = popt[n*3:n*3+3]
             C = popt[-1]
             fits.append( single_gaussian(xs, a,b,c, C))
-            f.write('#Gaussian #%i: a = %5.3f\tb = %5.3f\tc = %5.3f\n'%(n+1,a,b,c))
+            f.write('#Gaussian #%i: a = %5.3f\tb = %5.3f\tc = %5.3f\tFWHM = %5.3f\n'%(n+1,a,b,c,2.35482*c))
         f.write('#\n')
 
         fits = np.array(fits)
