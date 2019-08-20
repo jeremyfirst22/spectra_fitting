@@ -6,8 +6,10 @@ import matplotlib.pyplot as plt
 
 from gaussian_funcs import *
 from spectra_transformations import find_nearest
+from datetime import datetime 
 
-def read_data(fileName) :
+def read_data(opts) :
+    fileName = opts.inputFileName
     if not os.path.isfile(fileName) :
         print "Error: %s does not exist"%(fileName)
         sys.exit(2)
@@ -15,6 +17,15 @@ def read_data(fileName) :
         data = np.genfromtxt(fileName)
     except IOError :
         print "Error: Failed to import data from %s"%fileName
+    
+    if opts.doPlot : 
+        basename = os.path.splitext(opts.inputFileName)[0]
+        outfile  = basename + ".raw.png"
+
+        fig, ax = plt.subplots(1)
+        ax.scatter(data[:,0], data[:,1],marker='o',s=5,color='k',zorder=5)
+        fig.savefig(outfile,format='png')
+
     return data
 
 def write_fit_data(data,popt, opts) :
@@ -22,9 +33,7 @@ def write_fit_data(data,popt, opts) :
     fileName = basename + ".out"
 
     numpeaks = len(popt) / 3
-    #xs = np.linspace(np.min(data[:,0]),np.max(data[:,0]),500) 
-    xs = data[:,0]
-    ys = data[:,1]
+    xs = np.linspace(np.min(data[:,0]),np.max(data[:,0]),5000) 
 
     func = matchFunctionName(len(popt)/ 3)
     combinedFit = func(xs,*popt)
@@ -32,10 +41,23 @@ def write_fit_data(data,popt, opts) :
 
     avg, std = weighted_avg_and_std(data[:,0],data[:,1])
     fwhm = full_width_half_max(data[:,0], data[:,1], opts)
+    maxAbs = xs[np.argmax(combinedFit) ]
+
+    xs = data[:,0]
+    ys = data[:,1]
+
+    ##Reduce fit to x-axis of spectra
+    combinedFit = func(xs,*popt)
 
     with open(fileName,'w') as f :
+        f.write("# %s\n" %datetime.now() )
         f.write('#\n')
-        f.write("# Mean vibrational frequency: %.3f +/- %.3f. FWHM: %.3f \n"%(avg, std, fwhm) )
+        f.write("# Mean vibrational frequency:  %.3f +/- %.3f             \n"%(avg, std)       )
+        f.write("# FWHM:                        %.3f                      \n"%(fwhm)           )
+        f.write("# Frequency of max absorbance: %.3f                      \n"%(maxAbs)         )
+        f.write("#\n") 
+        f.write("# %s\n"%(' '.join(sys.argv) ) )
+        f.write("#\n") 
         f.write('# Fit to %i gaussians:\n'%numpeaks)
         f.write('# fit(x) = a*e^(-(x-b)^2 / (2c^2))\n')
         f.write('#\n')
@@ -57,9 +79,6 @@ def write_fit_data(data,popt, opts) :
             for n in range(numpeaks) :
                 f.write("\t%8.3f"%fits[n,i])
             f.write('\n')
-
-    xs = np.linspace(np.min(data[:,0]),np.max(data[:,1]),500)
-    fit = func(xs,*popt)
     return 0
 
 def plot_fits(data,popt, opts) :

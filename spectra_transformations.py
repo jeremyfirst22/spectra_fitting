@@ -49,6 +49,8 @@ def spline_fitting(x,y,opts) :
         axarr[0].plot(x,spl(x),'k--', label="Baseline spline fit"  )
 
         axarr[1].plot(x, y - spl(x))
+        axarr[1].axvline(x[minPeak], linestyle='--',color='r', label="bounds of cut") 
+        axarr[1].axvline(x[maxPeak], linestyle='--',color='r') 
 
         basename = os.path.splitext(opts.inputFileName)[0]
         fig.savefig(basename+'.spline_fitting.pdf', format='pdf')
@@ -108,8 +110,8 @@ def find_nearest(array, value, opts):
     if opts.debug : print "\tFound %.3f at %.3f. Looking for %.3f" %(array[idx],idx, value)
     return idx
 
-def cut_peak(data, minX, maxX, opts) :
-    if opts.debug : print "Now entering cut_peak function"
+def cut_spectrum(data, minX, maxX, opts) :
+    if opts.debug : print "Now entering cut_spectrum function"
     x,y = data[:,0], data[:,1]
 
     cutMin = find_nearest(x, minX, opts)

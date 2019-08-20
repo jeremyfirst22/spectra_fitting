@@ -66,10 +66,10 @@ def parse_command_line_opts(argv) :
 def main(argv) : 
     myOpts = parse_command_line_opts(argv) 
 
-    data = read_data(myOpts.inputFileName) 
+    data = read_data(myOpts) 
 
     if myOpts.doCut : 
-        data = cut_peak(data, min(myOpts.cuts) , max(myOpts.cuts), myOpts) 
+        data = cut_spectrum(data, min(myOpts.cuts) , max(myOpts.cuts), myOpts) 
 
     if myOpts.doSmooth : 
         data = smooth_data(data, myOpts) 
