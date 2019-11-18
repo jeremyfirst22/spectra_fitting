@@ -86,8 +86,8 @@ def main(argv) :
         if myOpts.debug : print baseline 
         data[:,1] -=  baseline
 
-    #if myOpts.doNormalize : 
-    #    data = normalize(data, myOpts) 
+    if myOpts.doNormalize : 
+        data = normalize(data, myOpts) 
 
     avg, std = weighted_avg_and_std(data[:,0],data[:,1]) 
     fwhm = full_width_half_max(data[:,0], data[:,1], myOpts) 
